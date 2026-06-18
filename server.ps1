@@ -33,19 +33,25 @@ while ($listener.IsListening) {
         $filePath = Join-Path $filePath 'index.html'
     }
 
-    if (Test-Path $filePath -PathType Leaf) {
-        $ext     = [System.IO.Path]::GetExtension($filePath).ToLower()
-        $mime    = if ($mimeTypes[$ext]) { $mimeTypes[$ext] } else { 'application/octet-stream' }
-        $bytes   = [System.IO.File]::ReadAllBytes($filePath)
-        $resp.ContentType     = $mime
-        $resp.ContentLength64 = $bytes.Length
-        $resp.StatusCode      = 200
-        $resp.OutputStream.Write($bytes, 0, $bytes.Length)
-    } else {
-        $resp.StatusCode = 404
-        $body = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found: $urlPath")
-        $resp.ContentLength64 = $body.Length
-        $resp.OutputStream.Write($body, 0, $body.Length)
+    try {
+        $resp.KeepAlive = $false
+        if (Test-Path $filePath -PathType Leaf) {
+            $ext     = [System.IO.Path]::GetExtension($filePath).ToLower()
+            $mime    = if ($mimeTypes[$ext]) { $mimeTypes[$ext] } else { 'application/octet-stream' }
+            $bytes   = [System.IO.File]::ReadAllBytes($filePath)
+            $resp.ContentType     = $mime
+            $resp.ContentLength64 = $bytes.Length
+            $resp.StatusCode      = 200
+            $resp.OutputStream.Write($bytes, 0, $bytes.Length)
+        } else {
+            $resp.StatusCode = 404
+            $body = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found: $urlPath")
+            $resp.ContentLength64 = $body.Length
+            $resp.OutputStream.Write($body, 0, $body.Length)
+        }
+    } catch {
+        # Client likely canceled the request (e.g. browser reload) — ignore.
+    } finally {
+        try { $resp.Close() } catch { }
     }
-    $resp.Close()
 }
